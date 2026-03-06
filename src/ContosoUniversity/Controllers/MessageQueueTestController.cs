@@ -1,5 +1,5 @@
 using System;
-using System.Web.Mvc;
+using Microsoft.AspNetCore.Mvc;
 using ContosoUniversity.Infrastructure;
 using ContosoUniversity.Services;
 using ContosoUniversity.Models;
@@ -10,9 +10,9 @@ namespace ContosoUniversity.Controllers
     {
         private readonly NotificationService _notificationService;
 
-        public MessageQueueTestController()
+        public MessageQueueTestController(NotificationService notificationService)
         {
-            _notificationService = new NotificationService();
+            _notificationService = notificationService;
         }
 
         public ActionResult Index()
@@ -138,13 +138,5 @@ namespace ContosoUniversity.Controllers
             return View("Index");
         }
 
-        protected override void Dispose(bool disposing)
-        {
-            if (disposing)
-            {
-                _notificationService?.Dispose();
-            }
-            base.Dispose(disposing);
-        }
     }
 }

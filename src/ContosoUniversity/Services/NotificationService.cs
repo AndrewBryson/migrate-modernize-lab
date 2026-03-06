@@ -1,8 +1,7 @@
 using System;
-using System.Configuration;
 using ContosoUniversity.Models;
 using ContosoUniversity.Infrastructure;
-using Newtonsoft.Json;
+using System.Text.Json;
 
 namespace ContosoUniversity.Services
 {
@@ -13,10 +12,8 @@ namespace ContosoUniversity.Services
 
         public NotificationService()
         {
-            // Get queue path from configuration or use default
-            _queuePath = ConfigurationManager.AppSettings["NotificationQueuePath"] ?? @".\Private$\ContosoUniversityNotifications";
+            _queuePath = @".\Private$\ContosoUniversityNotifications";
             
-            // Ensure the queue exists
             if (!MessageQueue.Exists(_queuePath))
             {
                 _queue = MessageQueue.Create(_queuePath);
@@ -27,7 +24,6 @@ namespace ContosoUniversity.Services
                 _queue = new MessageQueue(_queuePath);
             }
             
-            // Configure queue formatter
             _queue.Formatter = new XmlMessageFormatter(new Type[] { typeof(string) });
         }
 
@@ -51,7 +47,7 @@ namespace ContosoUniversity.Services
                     IsRead = false
                 };
 
-                var jsonMessage = JsonConvert.SerializeObject(notification);
+                var jsonMessage = JsonSerializer.Serialize(notification);
                 var message = new Message(jsonMessage)
                 {
                     Label = $"{entityType} {operation}",
@@ -62,7 +58,6 @@ namespace ContosoUniversity.Services
             }
             catch (Exception ex)
             {
-                // Log error but don't break the main operation
                 System.Diagnostics.Debug.WriteLine($"Failed to send notification: {ex.Message}");
             }
         }
@@ -73,11 +68,10 @@ namespace ContosoUniversity.Services
             {
                 var message = _queue.Receive(TimeSpan.FromSeconds(1));
                 var jsonContent = message.Body.ToString();
-                return JsonConvert.DeserializeObject<Notification>(jsonContent);
+                return JsonSerializer.Deserialize<Notification>(jsonContent);
             }
             catch (TimeoutException)
             {
-                // No messages available
                 return null;
             }
             catch (Exception ex)
@@ -89,8 +83,7 @@ namespace ContosoUniversity.Services
 
         public void MarkAsRead(int notificationId)
         {
-            // In a real implementation, you might want to store notifications in database as well
-            // for persistence and tracking read status
+            // In a real implementation, store notifications in database
         }
 
         private string GenerateMessage(string entityType, string entityId, string entityDisplayName, EntityOperation operation)
@@ -110,11 +103,6 @@ namespace ContosoUniversity.Services
                 default:
                     return $"{displayText} operation: {operation}";
             }
-        }
-
-        public void Dispose()
-        {
-            _queue?.Dispose();
         }
     }
 }

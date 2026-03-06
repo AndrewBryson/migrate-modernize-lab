@@ -50,7 +50,7 @@ namespace ContosoUniversity.Examples
                 Console.WriteLine("---");
             }
 
-            notificationService.Dispose();
+            notificationService.ReceiveNotification();
         }
 
         public async Task AsyncQueueOperations()

@@ -1,16 +1,22 @@
 using Microsoft.EntityFrameworkCore;
-using System.Configuration;
+using Microsoft.EntityFrameworkCore.Design;
+using Microsoft.Extensions.Configuration;
+using System.IO;
 
 namespace ContosoUniversity.Data
 {
-    public static class SchoolContextFactory
+    public class SchoolContextFactory : IDesignTimeDbContextFactory<SchoolContext>
     {
-        public static SchoolContext Create()
+        public SchoolContext CreateDbContext(string[] args)
         {
-            var connectionString = ConfigurationManager.ConnectionStrings["DefaultConnection"].ConnectionString;
+            var configuration = new ConfigurationBuilder()
+                .SetBasePath(Directory.GetCurrentDirectory())
+                .AddJsonFile("appsettings.json")
+                .Build();
+
             var optionsBuilder = new DbContextOptionsBuilder<SchoolContext>();
-            optionsBuilder.UseSqlServer(connectionString);
-            
+            optionsBuilder.UseSqlServer(configuration.GetConnectionString("DefaultConnection"));
+
             return new SchoolContext(optionsBuilder.Options);
         }
     }

@@ -8,7 +8,7 @@ import com.azure.storage.blob.models.BlobItem;
 import com.azure.storage.blob.options.BlobParallelUploadOptions;
 import com.microsoft.migration.assets.model.ImageMetadata;
 import com.microsoft.migration.assets.model.ImageProcessingMessage;
-import com.microsoft.migration.assets.model.S3StorageItem;
+import com.microsoft.migration.assets.model.StorageItem;
 import com.microsoft.migration.assets.repository.ImageMetadataRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
@@ -31,7 +31,7 @@ import static com.microsoft.migration.assets.config.RabbitConfig.IMAGE_PROCESSIN
 @Service
 @RequiredArgsConstructor
 @Profile("!dev") // Active when not in dev profile
-public class AwsS3Service implements StorageService {
+public class BlobStorageService implements StorageService {
 
     private final BlobServiceClient blobServiceClient;
     private final ServiceBusTemplate serviceBusTemplate;
@@ -41,19 +41,19 @@ public class AwsS3Service implements StorageService {
     private String containerName;
 
     @Override
-    public List<S3StorageItem> listObjects() {
+    public List<StorageItem> listObjects() {
         BlobContainerClient containerClient = blobServiceClient.getBlobContainerClient(containerName);
         
         return StreamSupport.stream(containerClient.listBlobs().spliterator(), false)
                 .map(blobItem -> {
                     // Try to get metadata for upload time
                     Instant uploadedAt = imageMetadataRepository.findAll().stream()
-                            .filter(metadata -> metadata.getS3Key().equals(blobItem.getName()))
+                            .filter(metadata -> metadata.getStorageKey().equals(blobItem.getName()))
                             .map(metadata -> metadata.getUploadedAt().atZone(java.time.ZoneId.systemDefault()).toInstant())
                             .findFirst()
                             .orElse(blobItem.getProperties().getLastModified().toInstant()); // fallback to lastModified if metadata not found
 
-                    return new S3StorageItem(
+                    return new StorageItem(
                             blobItem.getName(),
                             extractFilename(blobItem.getName()),
                             blobItem.getProperties().getContentLength(),
@@ -92,8 +92,8 @@ public class AwsS3Service implements StorageService {
         metadata.setFilename(file.getOriginalFilename());
         metadata.setContentType(file.getContentType());
         metadata.setSize(file.getSize());
-        metadata.setS3Key(key);
-        metadata.setS3Url(generateUrl(key));
+        metadata.setStorageKey(key);
+        metadata.setStorageUrl(generateUrl(key));
 
         imageMetadataRepository.save(metadata);
     }
@@ -124,7 +124,7 @@ public class AwsS3Service implements StorageService {
 
         // Delete metadata from database
         imageMetadataRepository.findAll().stream()
-                .filter(metadata -> metadata.getS3Key().equals(key))
+                .filter(metadata -> metadata.getStorageKey().equals(key))
                 .findFirst()
                 .ifPresent(metadata -> imageMetadataRepository.delete(metadata));
     }

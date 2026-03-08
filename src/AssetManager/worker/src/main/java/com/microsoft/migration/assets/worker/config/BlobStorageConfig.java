@@ -1,4 +1,4 @@
-package com.microsoft.migration.assets.config;
+package com.microsoft.migration.assets.worker.config;
 
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
@@ -9,8 +9,7 @@ import com.azure.storage.blob.BlobServiceClient;
 import com.azure.storage.blob.BlobServiceClientBuilder;
 
 @Configuration
-public class AwsS3Config {
-
+public class BlobStorageConfig {
     @Value("${azure.storage.account-name}")
     private String accountName;
 

@@ -19,7 +19,7 @@ import java.nio.file.StandardCopyOption;
 @Service
 @Profile("!dev")
 @RequiredArgsConstructor
-public class S3FileProcessingService extends AbstractFileProcessingService {
+public class BlobFileProcessingService extends AbstractFileProcessingService {
     private final BlobServiceClient blobServiceClient;
     private final ImageMetadataRepository imageMetadataRepository;
     
@@ -52,7 +52,7 @@ public class S3FileProcessingService extends AbstractFileProcessingService {
         
         // Find and update metadata
         imageMetadataRepository.findAll().stream()
-            .filter(metadata -> metadata.getS3Key().equals(originalKey))
+            .filter(metadata -> metadata.getStorageKey().equals(originalKey))
             .findFirst()
             .ifPresent(metadata -> {
                 metadata.setThumbnailKey(key);

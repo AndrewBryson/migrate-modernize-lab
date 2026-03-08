@@ -24,7 +24,7 @@ import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
-public class S3FileProcessingServiceTest {
+public class BlobFileProcessingServiceTest {
 
     @Mock
     private BlobServiceClient blobServiceClient;
@@ -39,7 +39,7 @@ public class S3FileProcessingServiceTest {
     private ImageMetadataRepository imageMetadataRepository;
 
     @InjectMocks
-    private S3FileProcessingService s3FileProcessingService;
+    private BlobFileProcessingService blobFileProcessingService;
 
     private final String containerName = "test-container";
     private final String testKey = "test-image.jpg";
@@ -47,7 +47,7 @@ public class S3FileProcessingServiceTest {
 
     @BeforeEach
     void setUp() {
-        ReflectionTestUtils.setField(s3FileProcessingService, "containerName", containerName);
+        ReflectionTestUtils.setField(blobFileProcessingService, "containerName", containerName);
         lenient().when(blobServiceClient.getBlobContainerClient(anyString())).thenReturn(blobContainerClient);
         lenient().when(blobContainerClient.getBlobClient(anyString())).thenReturn(blobClient);
     }
@@ -55,7 +55,7 @@ public class S3FileProcessingServiceTest {
     @Test
     void getStorageTypeReturnsAzureBlob() {
         // Act
-        String result = s3FileProcessingService.getStorageType();
+        String result = blobFileProcessingService.getStorageType();
 
         // Assert
         assertEquals("azureblob", result);
@@ -71,7 +71,7 @@ public class S3FileProcessingServiceTest {
         lenient().doReturn(mockInputStream).when(blobClient).openInputStream();
 
         // Act
-        s3FileProcessingService.downloadOriginal(testKey, tempFile);
+        blobFileProcessingService.downloadOriginal(testKey, tempFile);
 
         // Assert
         verify(blobServiceClient).getBlobContainerClient(containerName);
@@ -89,7 +89,7 @@ public class S3FileProcessingServiceTest {
         lenient().when(blobClient.getBlobUrl()).thenReturn("https://test.blob.core.windows.net/container/blob");
 
         // Act
-        s3FileProcessingService.uploadThumbnail(tempFile, thumbnailKey, "image/jpeg");
+        blobFileProcessingService.uploadThumbnail(tempFile, thumbnailKey, "image/jpeg");
 
         // Assert
         verify(blobServiceClient).getBlobContainerClient(containerName);
@@ -104,7 +104,7 @@ public class S3FileProcessingServiceTest {
     void testExtractOriginalKey() throws Exception {
         // Use reflection to test private method
         String result = (String) ReflectionTestUtils.invokeMethod(
-                s3FileProcessingService,
+                blobFileProcessingService,
                 "extractOriginalKey",
                 "image_thumbnail.jpg");
 

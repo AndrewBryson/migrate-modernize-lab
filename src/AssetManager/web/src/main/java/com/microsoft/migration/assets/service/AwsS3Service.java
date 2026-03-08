@@ -1,13 +1,15 @@
 package com.microsoft.migration.assets.service;
 
+import com.azure.spring.messaging.servicebus.core.ServiceBusTemplate;
 import com.microsoft.migration.assets.model.ImageMetadata;
 import com.microsoft.migration.assets.model.ImageProcessingMessage;
 import com.microsoft.migration.assets.model.S3StorageItem;
 import com.microsoft.migration.assets.repository.ImageMetadataRepository;
 import lombok.RequiredArgsConstructor;
-import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Profile;
+import org.springframework.messaging.Message;
+import org.springframework.messaging.support.MessageBuilder;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 import software.amazon.awssdk.core.sync.RequestBody;
@@ -29,7 +31,7 @@ import static com.microsoft.migration.assets.config.RabbitConfig.IMAGE_PROCESSIN
 public class AwsS3Service implements StorageService {
 
     private final S3Client s3Client;
-    private final RabbitTemplate rabbitTemplate;
+    private final ServiceBusTemplate serviceBusTemplate;
     private final ImageMetadataRepository imageMetadataRepository;
 
     @Value("${aws.s3.bucket}")
@@ -76,13 +78,14 @@ public class AwsS3Service implements StorageService {
         s3Client.putObject(request, RequestBody.fromInputStream(file.getInputStream(), file.getSize()));
 
         // Send message to queue for thumbnail generation
-        ImageProcessingMessage message = new ImageProcessingMessage(
+        ImageProcessingMessage messagePayload = new ImageProcessingMessage(
             key,
             file.getContentType(),
             getStorageType(),
             file.getSize()
         );
-        rabbitTemplate.convertAndSend(IMAGE_PROCESSING_QUEUE, message);
+        Message<ImageProcessingMessage> message = MessageBuilder.withPayload(messagePayload).build();
+        serviceBusTemplate.send(IMAGE_PROCESSING_QUEUE, message);
 
         // Create and save metadata to database
         ImageMetadata metadata = new ImageMetadata();

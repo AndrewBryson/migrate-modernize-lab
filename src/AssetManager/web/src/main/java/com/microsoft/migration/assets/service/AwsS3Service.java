@@ -1,6 +1,11 @@
 package com.microsoft.migration.assets.service;
 
 import com.azure.spring.messaging.servicebus.core.ServiceBusTemplate;
+import com.azure.storage.blob.BlobClient;
+import com.azure.storage.blob.BlobContainerClient;
+import com.azure.storage.blob.BlobServiceClient;
+import com.azure.storage.blob.models.BlobItem;
+import com.azure.storage.blob.options.BlobParallelUploadOptions;
 import com.microsoft.migration.assets.model.ImageMetadata;
 import com.microsoft.migration.assets.model.ImageProcessingMessage;
 import com.microsoft.migration.assets.model.S3StorageItem;
@@ -12,9 +17,6 @@ import org.springframework.messaging.Message;
 import org.springframework.messaging.support.MessageBuilder;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
-import software.amazon.awssdk.core.sync.RequestBody;
-import software.amazon.awssdk.services.s3.S3Client;
-import software.amazon.awssdk.services.s3.model.*;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -22,6 +24,7 @@ import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
 import java.util.stream.Collectors;
+import java.util.stream.StreamSupport;
 
 import static com.microsoft.migration.assets.config.RabbitConfig.IMAGE_PROCESSING_QUEUE;
 
@@ -30,37 +33,33 @@ import static com.microsoft.migration.assets.config.RabbitConfig.IMAGE_PROCESSIN
 @Profile("!dev") // Active when not in dev profile
 public class AwsS3Service implements StorageService {
 
-    private final S3Client s3Client;
+    private final BlobServiceClient blobServiceClient;
     private final ServiceBusTemplate serviceBusTemplate;
     private final ImageMetadataRepository imageMetadataRepository;
 
-    @Value("${aws.s3.bucket}")
-    private String bucketName;
+    @Value("${azure.storage.container-name}")
+    private String containerName;
 
     @Override
     public List<S3StorageItem> listObjects() {
-        ListObjectsV2Request request = ListObjectsV2Request.builder()
-                .bucket(bucketName)
-                .build();
-
-        ListObjectsV2Response response = s3Client.listObjectsV2(request);
-
-        return response.contents().stream()
-                .map(s3Object -> {
+        BlobContainerClient containerClient = blobServiceClient.getBlobContainerClient(containerName);
+        
+        return StreamSupport.stream(containerClient.listBlobs().spliterator(), false)
+                .map(blobItem -> {
                     // Try to get metadata for upload time
                     Instant uploadedAt = imageMetadataRepository.findAll().stream()
-                            .filter(metadata -> metadata.getS3Key().equals(s3Object.key()))
+                            .filter(metadata -> metadata.getS3Key().equals(blobItem.getName()))
                             .map(metadata -> metadata.getUploadedAt().atZone(java.time.ZoneId.systemDefault()).toInstant())
                             .findFirst()
-                            .orElse(s3Object.lastModified()); // fallback to lastModified if metadata not found
+                            .orElse(blobItem.getProperties().getLastModified().toInstant()); // fallback to lastModified if metadata not found
 
                     return new S3StorageItem(
-                            s3Object.key(),
-                            extractFilename(s3Object.key()),
-                            s3Object.size(),
-                            s3Object.lastModified(),
+                            blobItem.getName(),
+                            extractFilename(blobItem.getName()),
+                            blobItem.getProperties().getContentLength(),
+                            blobItem.getProperties().getLastModified().toInstant(),
                             uploadedAt,
-                            generateUrl(s3Object.key())
+                            generateUrl(blobItem.getName())
                     );
                 })
                 .collect(Collectors.toList());
@@ -69,13 +68,13 @@ public class AwsS3Service implements StorageService {
     @Override
     public void uploadObject(MultipartFile file) throws IOException {
         String key = generateKey(file.getOriginalFilename());
-        PutObjectRequest request = PutObjectRequest.builder()
-                .bucket(bucketName)
-                .key(key)
-                .contentType(file.getContentType())
-                .build();
+        BlobContainerClient containerClient = blobServiceClient.getBlobContainerClient(containerName);
+        BlobClient blobClient = containerClient.getBlobClient(key);
         
-        s3Client.putObject(request, RequestBody.fromInputStream(file.getInputStream(), file.getSize()));
+        BlobParallelUploadOptions options = new BlobParallelUploadOptions(file.getInputStream());
+        options.setHeaders(new com.azure.storage.blob.models.BlobHttpHeaders().setContentType(file.getContentType()));
+        
+        blobClient.uploadWithResponse(options, null, null);
 
         // Send message to queue for thumbnail generation
         ImageProcessingMessage messagePayload = new ImageProcessingMessage(
@@ -101,31 +100,24 @@ public class AwsS3Service implements StorageService {
 
     @Override
     public InputStream getObject(String key) throws IOException {
-        GetObjectRequest request = GetObjectRequest.builder()
-                .bucket(bucketName)
-                .key(key)
-                .build();
+        BlobContainerClient containerClient = blobServiceClient.getBlobContainerClient(containerName);
+        BlobClient blobClient = containerClient.getBlobClient(key);
         
-        return s3Client.getObject(request);
+        return blobClient.openInputStream();
     }
 
     @Override
     public void deleteObject(String key) throws IOException {
-        // Delete both original and thumbnail if it exists
-        DeleteObjectRequest request = DeleteObjectRequest.builder()
-                .bucket(bucketName)
-                .key(key)
-                .build();
+        BlobContainerClient containerClient = blobServiceClient.getBlobContainerClient(containerName);
         
-        s3Client.deleteObject(request);
+        // Delete both original and thumbnail if it exists
+        BlobClient blobClient = containerClient.getBlobClient(key);
+        blobClient.deleteIfExists();
 
         try {
             // Try to delete thumbnail if it exists
-            DeleteObjectRequest thumbnailRequest = DeleteObjectRequest.builder()
-                    .bucket(bucketName)
-                    .key(getThumbnailKey(key))
-                    .build();
-            s3Client.deleteObject(thumbnailRequest);
+            BlobClient thumbnailClient = containerClient.getBlobClient(getThumbnailKey(key));
+            thumbnailClient.deleteIfExists();
         } catch (Exception e) {
             // Ignore if thumbnail doesn't exist
         }
@@ -139,7 +131,7 @@ public class AwsS3Service implements StorageService {
 
     @Override
     public String getStorageType() {
-        return "s3";
+        return "azureblob";
     }
 
     private String extractFilename(String key) {
@@ -150,5 +142,22 @@ public class AwsS3Service implements StorageService {
 
     private String generateKey(String filename) {
         return UUID.randomUUID().toString() + "-" + filename;
+    }
+    
+    private String generateUrl(String key) {
+        BlobContainerClient containerClient = blobServiceClient.getBlobContainerClient(containerName);
+        BlobClient blobClient = containerClient.getBlobClient(key);
+        return blobClient.getBlobUrl();
+    }
+    
+    private String getThumbnailKey(String key) {
+        // For a key like "xxxxx.png", return "xxxxx_thumbnail.png"
+        int extensionIndex = key.lastIndexOf('.');
+        if (extensionIndex > 0) {
+            String nameWithoutExtension = key.substring(0, extensionIndex);
+            String extension = key.substring(extensionIndex);
+            return nameWithoutExtension + "_thumbnail" + extension;
+        }
+        return key + "_thumbnail";
     }
 }

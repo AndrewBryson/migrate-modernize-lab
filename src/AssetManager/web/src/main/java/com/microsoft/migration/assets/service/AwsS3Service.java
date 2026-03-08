@@ -144,13 +144,15 @@ public class AwsS3Service implements StorageService {
         return UUID.randomUUID().toString() + "-" + filename;
     }
     
-    private String generateUrl(String key) {
+    @Override
+    public String generateUrl(String key) {
         BlobContainerClient containerClient = blobServiceClient.getBlobContainerClient(containerName);
         BlobClient blobClient = containerClient.getBlobClient(key);
         return blobClient.getBlobUrl();
     }
     
-    private String getThumbnailKey(String key) {
+    @Override
+    public String getThumbnailKey(String key) {
         // For a key like "xxxxx.png", return "xxxxx_thumbnail.png"
         int extensionIndex = key.lastIndexOf('.');
         if (extensionIndex > 0) {

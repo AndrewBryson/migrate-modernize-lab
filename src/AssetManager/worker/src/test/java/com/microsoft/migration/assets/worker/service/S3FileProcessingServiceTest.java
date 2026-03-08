@@ -67,7 +67,7 @@ public class S3FileProcessingServiceTest {
         Path tempFile = Files.createTempFile("download-", ".tmp");
         InputStream mockInputStream = new ByteArrayInputStream("test content".getBytes());
 
-        when(blobClient.openInputStream()).thenReturn(mockInputStream);
+        when(blobClient.openInputStream()).thenAnswer(invocation -> mockInputStream);
 
         // Act
         s3FileProcessingService.downloadOriginal(testKey, tempFile);

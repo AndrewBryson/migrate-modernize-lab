@@ -389,7 +389,7 @@ Modernize the Contoso University .NET Framework application to .NET 9 and deploy
 
 ---
 
-## Challenge 4 - # Modernize the Asset Manager Java Application
+## Challenge 4 - Modernize the Asset Manager Java Application
 
 ## Goal
 

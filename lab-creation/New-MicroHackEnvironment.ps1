@@ -5,15 +5,24 @@
 ######################################################
 
 $SkillableEnvironment = $false
+$ArmTemplateFileName = "lab197959-template-v6-novm.json"
 $EnvironmentName = "mig$(Get-Date -Format 'yyMMddHHmmss')" # Set your environment name here for non-Skillable environments
 $ScriptVersion = "16.0.0"
-$EnvironmentName = "" # Globally unique! Set your environment name here
 
-if($EnvironmentName -eq "" ) {
+######################################################
+##############   DEBUG CONFIGURATIONS   ##############
+######################################################
+# These settings should be all empty "" unless you are debugging
+$LocalZipFilePath = "C:\Users\crgar\Downloads\CollectorV2.zip"
+$DefaultLocation = "francecentral"
+
+# Environment name and prefix for all azure resources.
+# Download script will replace <LABINSTANCEID> with a unique name before execution.
+# If the replacement is not done, we set a default name here.
+$EnvironmentName = "<LABINSTANCEID>"
+if($EnvironmentName -like "*LABINSTANCEID*" ) {
     $EnvironmentName = "lab" + (Get-Date -Format "yyMMddHHmmss")
 }
-
-
 ######################################################
 ##############   INFRASTRUCTURE FUNCTIONS   #########
 ######################################################
@@ -131,7 +140,6 @@ function Get-AzureRegion {
         [bool]$IsSkillableEnvironment
     )
     
-    $defaultLocation = "swedencentral"
     Write-LogToBlob "Determining location for operations"
     
     # If Skillable environment, try to get location from MigrateProject
@@ -147,17 +155,17 @@ function Get-AzureRegion {
                 Write-LogToBlob "Using Migrate Project location: $($response.location)"
                 return $response.location
             } else {
-                Write-LogToBlob "Migrate Project location not available, using default location: $defaultLocation" -Level "WARN"
-                return $defaultLocation
+                Write-LogToBlob "Migrate Project location not available, using default location: $DefaultLocation" -Level "WARN"
+                return $DefaultLocation
             }
         } catch {
-            Write-LogToBlob "Could not retrieve Migrate Project location: $($_.Exception.Message). Using default location: $defaultLocation" -Level "WARN"
-            return $defaultLocation
+            Write-LogToBlob "Could not retrieve Migrate Project location: $($_.Exception.Message). Using default location: $DefaultLocation" -Level "WARN"
+            return $DefaultLocation
         }
     } else {
         # Non-Skillable environment: use default location (MigrateProject doesn't exist yet)
-        Write-LogToBlob "Non-Skillable environment - using default location: $defaultLocation"
-        return $defaultLocation
+        Write-LogToBlob "Non-Skillable environment - using default location: $DefaultLocation"
+        return $DefaultLocation
     }
 }
 
@@ -173,15 +181,14 @@ function New-AzureEnvironment {
     try {
         Write-LogToBlob "Environment location: $Location"
         
-        $templateFileName = "lab197959-template-v6.json"
-        $templateFilePath = ".\templates\$templateFileName"
+        $templateFilePath = ".\templates\$ArmTemplateFileName"
 
         if (Test-Path $templateFilePath) {
             Write-LogToBlob "Local ARM template found: $templateFilePath"
         } else {
             Write-LogToBlob "Local ARM template not found. Downloading from GitHub..." "WARN"
-            $remoteTemplateUrl = "https://raw.githubusercontent.com/crgarcia12/migrate-modernize-lab/refs/heads/main/lab-creation/templates/$templateFileName"
-            $templateFilePath = Join-Path $env:TEMP $templateFileName
+            $remoteTemplateUrl = "https://raw.githubusercontent.com/crgarcia12/migrate-modernize-lab/refs/heads/main/lab-creation/templates/$ArmTemplateFileName"
+            $templateFilePath = Join-Path $env:TEMP $ArmTemplateFileName
             
             Write-LogToBlob "Downloading template from: $remoteTemplateUrl"
             Invoke-WebRequest -Uri $remoteTemplateUrl -OutFile $templateFilePath -UseBasicParsing
@@ -501,15 +508,26 @@ function Register-MigrateTools {
 function Get-DiscoveryArtifacts {
     Write-LogToBlob "Downloading discovery artifacts"
     
+    # If we are debugging, then we can provide in the settings a local zip file path.
+    # If not provided, it will download the one from the GH repo
+    if($LocalZipFilePath) {
+        Write-LogToBlob "Using local discovery artifacts from: $LocalZipFilePath"
+        if (-Not (Test-Path $LocalZipFilePath)) {
+            Write-LogToBlob "Local discovery artifacts not found at: $LocalZipFilePath" "ERROR"
+            throw "Local discovery artifacts not found"
+        }
+        return $LocalZipFilePath
+    }
+
     try {
         $remoteZipFilePath = "https://github.com/crgarcia12/migrate-modernize-lab/raw/refs/heads/main/lab-creation/Azure-Migrate-Discovery.zip"
-        $localZipFilePath = Join-Path (Get-Location) "importArtifacts.zip"
+        $LocalZipFilePath = Join-Path (Get-Location) "importArtifacts.zip"
         
         Write-LogToBlob "Downloading artifacts from: $remoteZipFilePath"
-        Invoke-WebRequest $remoteZipFilePath -OutFile $localZipFilePath
-        Write-LogToBlob "Downloaded artifacts to: $localZipFilePath"
+        Invoke-WebRequest $remoteZipFilePath -OutFile $LocalZipFilePath
+        Write-LogToBlob "Downloaded artifacts to: $LocalZipFilePath"
         
-        return $localZipFilePath
+        return $LocalZipFilePath
     }
     catch {
         Write-LogToBlob "Failed to download discovery artifacts: $($_.Exception.Message)" "ERROR"
@@ -1317,14 +1335,6 @@ function Invoke-AzureMigrateConfiguration {
         [string] $EnvironmentName
     )
     
-    # Environment name and prefix for all azure resources
-    if ($SkillableEnvironment) {
-        $EnvironmentName = "<LABINSTANCEID>"
-    }
-    else {
-        $EnvironmentName = $EnvironmentName
-    }
-
     # Define all resource names
     $subscriptionId = (Get-AzContext).Subscription.Id
     $resourceGroupName = if ($SkillableEnvironment) { "on-prem" } else { "${EnvironmentName}-rg" }

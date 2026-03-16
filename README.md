@@ -4,6 +4,17 @@
 
 This MicroHack scenario walks through a complete migration and modernization journey using Azure Migrate and GitHub Copilot. The experience covers discovery, assessment, business case development, and application modernization for both .NET and Java workloads.
 
+## 🔒 Security & Accessibility Assessments
+
+**Important:** Security and accessibility assessments have been completed for the AssetManager Java application:
+
+- **[ASSESSMENT_SUMMARY.md](ASSESSMENT_SUMMARY.md)** - Executive summary of findings and action plan
+- **[SECURITY_ASSESSMENT.md](SECURITY_ASSESSMENT.md)** - Detailed security vulnerability analysis
+- **[ACCESSIBILITY_ASSESSMENT.md](ACCESSIBILITY_ASSESSMENT.md)** - WCAG 2.1 accessibility compliance audit
+- **[SECURITY_FIXES_QUICKSTART.md](SECURITY_FIXES_QUICKSTART.md)** - Developer quick reference guide
+
+**Critical findings require immediate attention before production deployment.**
+
 ## MicroHack Context
 
 This MicroHack provides hands-on experience with the entire migration lifecycle - from initial discovery of on-premises infrastructure through to deploying modernized applications on Azure. You'll work with a simulated datacenter environment and use AI-powered tools to accelerate modernization.
